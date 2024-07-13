@@ -2,6 +2,7 @@ import whisper
 import torch
 import coremltools as ct
 from coremltools.models.neural_network import quantization_utils
+from coremltools.models import MLModel
 
 # model setting
 modelSize="tiny"
@@ -16,22 +17,22 @@ melSegment = torch.ones((1, 80, 3000))
 traced_encoder = torch.jit.trace(encoder, melSegment)
 
 # convert to coreml model
-encoder = ct.convert(
+encoder = ct.converters.convert(
     traced_encoder,
     inputs=[ct.TensorType(name="melSegment", shape=melSegment.shape)],
     outputs=[ct.TensorType(name="output")],
     compute_units=ct.ComputeUnit.ALL,
 )
 
-encoder_fp16 = quantization_utils.quantize_weights(encoder, nbits=16)
-encoder_fp16.save(f"encoder_{modelSize}_fp16.mlmodel")
+# encoder_fp16 = quantization_utils.quantize_weights(encoder, nbits=16, convert_to="neuralnetwork")
+# encoder_fp16.save(f"encoder_{modelSize}_fp16.mlmodel")
 
 # test accuracy
 torch_output = traced_encoder.forward(melSegment)
 print("torch model output:", torch_output)
 melSegment = melSegment.cpu().detach().numpy()
 coreml_output = torch.from_numpy(
-  list(encoder_fp16.predict({'melSegment': melSegment}).values())[0]
+  list(encoder.predict({'melSegment': melSegment}).values())[0]
 )
 print(f"coreml {modelSize} model output:", coreml_output)
 diff = torch.abs(torch_output - coreml_output).detach()
